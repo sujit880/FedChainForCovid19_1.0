@@ -195,7 +195,7 @@ def model_finetune(model, class_names, device):
 if __name__ == '__main__':
     print("in model1 main\n")
     dataset_path = "./Dataset/"
-    data_dir_name = input("Enter the name of datset: Ex. data-1: ")
+    data_dir_name = input("Enter the name of datset: Ex. hospital-1: ")
     data_dir = dataset_path + data_dir_name
     dataloaders, dataset_sizes, class_names, device = load_data(data_dir=data_dir)
 
