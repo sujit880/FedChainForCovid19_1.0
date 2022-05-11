@@ -1,5 +1,5 @@
-# License: BSD
-# Author: Sasank Chilamkurthy
+# License: Apache
+# Author: Sujit Chowdhury
 
 from __future__ import print_function, division
 
@@ -45,19 +45,20 @@ def imshow(inp, title=None):
         plt.title(title)
     plt.pause(0.001)  # pause a bit so that plots are updated
 
-def load_data(data_dir):
+def load_data(data_dir, num_workers=2, batch_size=4):
     dataset = ImageFolder(data_dir, transform=Compose([Resize((224,224)), ToTensor()]))
     print("len: ", len(dataset))
     datasets = train_test_dataset(dataset)
     print(len(datasets['train']))
     print(datasets['train'][0][1])
-    dataloaders = {x: DataLoader(datasets[x], batch_size=4,
-                                             shuffle=True, num_workers=2)
+    dataloaders = {x: DataLoader(datasets[x], batch_size=batch_size,
+                                             shuffle=True, num_workers=num_workers)
               for x in ['train', 'test']}
     dataset_sizes = {x: len(datasets[x]) for x in ['train', 'test']}
     class_names = dataset.classes
     print("Classes: ", class_names)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:4" if torch.cuda.is_available() else "cpu")
+    print("\nDevice: ", device)
     return dataloaders, dataset_sizes, class_names, device
 
 
@@ -115,7 +116,7 @@ def train_model(model, dataloaders, dataset_sizes, device, criterion, optimizer,
             print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
 
             # deep copy the model
-            if phase == 'val' and epoch_acc > best_acc:
+            if phase == 'test' and epoch_acc > best_acc:
                 best_acc = epoch_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
 
@@ -132,23 +133,53 @@ def train_model(model, dataloaders, dataset_sizes, device, criterion, optimizer,
 def get_model(model_name):
     print("\nModel: ", model_name)
     switcher = {
-        'Resnet18': models.resnet18(pretrained=True),
+        'Resnet18': models.resnet18(pretrained=True), 
+        'resnet18': models.resnet18(pretrained=True),
+        'alexnet': models.alexnet(pretrained=True),
+        'vgg16' : models.vgg16(pretrained=True),
+        'squeezenet': models.squeezenet1_0(pretrained=True),
+        'densenet': models.densenet161(pretrained=True),
+        'inception': models.inception_v3(pretrained=True),
+        'googlenet': models.googlenet(pretrained=True),
+        
         1: models.resnet18(pretrained=True),
         2: models.resnet18(pretrained=True),
     }
+    ALIAS = model_name
     return switcher.get(model_name, None)
+
+def get_model_ft(model_name, model):
+    print("\nModel: ", model_name)
+    switcher = {
+        'Resnet18': model_ft.fc, 
+        'resnet18': model_ft.fc,
+        'alexnet': model_ft.classifier[0],
+        'vgg16' :model_ft.classifier[0],
+        'densenet': model.classifier[0],
+    }
+    return switcher.get(model_ft, None)
 
 
 def model_finetune(model, class_names, device):
     
     model_ft = get_model(model_name=model)
-    num_ftrs = model_ft.fc.in_features
+    
     # Here the size of each output sample is set to 2.
     # Alternatively, it can be generalized to nn.Linear(num_ftrs, len(class_names)).
-    model_ft.fc = nn.Linear(num_ftrs, len(class_names))
+    if model == "resnet18":   
+        num_ftrs = model_ft.fc.in_features     
+        model_ft.fc = nn.Linear(num_ftrs, len(class_names))
+    
+    if model == 'vgg16':
+        num_ftrs= model_ft.classifier[6].in_features
+        model_ft.classifier[6] = nn.Linear(num_ftrs, len(class_names))
 
+    if model =='densenet':
+        num_ftrs= model_ft.classifier.in_features
+        model_ft.classifier = nn.Linear(num_ftrs, len(class_names))
     model_ft = model_ft.to(device)
-
+    
+    print("number of features: ", num_ftrs)
     criterion = nn.CrossEntropyLoss()
 
     # Observe that all parameters are being optimized
